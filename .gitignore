@@ -1,0 +1,23 @@
+# Upstream ALE tool — cloned separately, NOT re-hosted here
+agents-last-exam/
+
+# Secrets — NEVER commit
+secret/
+.env
+*.env
+gcp_key.json
+*_key.json
+*.pem
+*-key.json
+
+# Run outputs / logs / scratch
+.logs/
+*.log
+output/
+scratch/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+__pycache__/
