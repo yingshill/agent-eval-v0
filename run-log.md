@@ -15,8 +15,8 @@
 | spec 审计（对真实 repo） | ✅ | 见 commit；纠正了任务文件路径 + setup 时长 |
 | GCP 账号 + $300 试用 | 🙋 ⬜ | 只有 Elena 能做 |
 | OpenRouter key + 余额 | 🙋 ⬜ | 只有 Elena 能做 |
-| `uv` 安装 | ⬜ | `brew install uv` |
-| `gcloud` 安装 | ⬜ | `brew install --cask google-cloud-sdk` |
+| `uv` 安装 | ✅ | 0.11.19（brew） |
+| `gcloud` 安装 | ✅ | 572.0.0（brew cask）；待 `gcloud auth login` |
 | demo 跑通（Phase 4） | ⬜ | 管道验证里程碑 |
 | 真 v0 跑数（Phase 5） | ⬜ | |
 
