@@ -16,8 +16,14 @@ gcp_key.json
 output/
 scratch/
 
+# Local-only handoff (contains strategy context — never push)
+HANDOFF.md
+
 # OS / editor
 .DS_Store
 .idea/
 .vscode/
 __pycache__/
+
+# Local Claude Code settings (machine-local permissions/state)
+.claude/
