@@ -22,6 +22,142 @@
 | demo 跑通（Phase 4） | ✅ | **2026-06-09 18:14 跑通！** claude_code × demo/hello = `completed, score 1.00, 762.8s`；e2-standard-4 + pd-balanced；0 残留 VM/disk。管道端到端验证成功（v0 最硬里程碑） |
 | 真 v0 跑数（Phase 5） | ⬜ | |
 
+## 2026-06-10/11 续跑（Phase 5 启动：真任务 smoke + baseline 准备）
+
+| 日期 | 步骤 | 动作 | 结果 | 备注 |
+|---|---|---|---|---|
+| 06-10 | 验配额/容量 | 查 SSD grant + 8-vCPU 容量（晨间） | SSD：central1/east1=2000 ✅，east4 仍 500；c4 容量晨间回血（central1-a/east4-a ✅）；n2 容量仍偏紧 | 错峰策略验证：晨间容量确实好转 |
+| 06-10 | swap 任务集 | example_exp.yaml → `selected_tasks/unlicensed/smoke.txt`（1 题 legal/agora_governance_classify） | dry-run ✅ | |
+| 06-10 | **真任务 smoke 跑通** | claude_code × legal/agora_governance_classify | ✅ **`completed, score 0.553, 1445s`**，eval success，0 残留 | **真任务管道端到端验证成功**（分数是分段加权，非 0/1） |
+| 06-11 | 定位 20min provision 慢因 | 读 smoke provision 日志 | ⚠️ **新配额墙：`HDB_TOTAL_GB`（hyperdisk）=500，全区**。c4-standard-4 用 hyperdisk-balanced 盘、image 600GB>500 → c4 全 10 zone 被 HDB 配额挡 → 退到 n2-standard-4 再扫容量（带 backoff）共耗 ~20min | 与 SSD 墙同理，只是 hyperdisk |
+| 06-11 | 查机型分布 | 42 道 cpu-free-ubuntu 的 machineType | **全部 `c4-standard-4`（4 vCPU）** → 整个 Linux sweep 走 c4+hyperdisk，需 HDB 配额；SSD 仅 n2 回退时用 | 成本利好：4-vCPU ~$0.21/hr，单跑 ~$0.04-0.10，90 跑 ~$4-9 |
+| 06-11 | revert n2 默认 | `_DEFAULT_CPU_MACHINE` 改回 `c4-standard-8`（ALE 原值） | ✅ 因所有任务都 pin 机型、默认根本用不到；改配额而非改 ALE 机型选择更 faithful | |
+| 06-11 | 提 HDB 配额 | REST：HDB_TOTAL_GB central1/east1/east4 → 2000 | ⏳ 已提交（`hdb-*-2k`），reconciling，约 10min 批 | 批下后 c4 直接起、provision 应回到 ~4min |
+
+**v0-linux 子集（18 题，全 c4-standard-4 cpu-free-ubuntu；文件在 gitignore 的 clone 里，故在此留档）：**
+business_finance/{financial_stmt_reconstruction_aapl_fy2024, pe_screening_memo_1, bpmn_supply_disruption_l3} · computing_math/{synthetic_causal_structure_inference, recsys_cold_start_instance_1, k8s_payment_api_root_cause_analysis, os_log_permission_guard_v1, cp_test_gen_1} · health_medicine/{crf_sdtm_mapping_4, epidemiology_forecast, nhanes_confounder_sensitivity_analysis, causal_ihdp_ite_estimation_6a_v1} · life_sciences/{cell_tracking_instance_1, tcga_brca_deg_analysis} · legal/agora_governance_classify_instance_1 · physical_sciences/molecular_structure_plausibility · education_info/homework_grading_numerical_pdes_instance_02 · transport_safety/capacitated_vehicle_routing_problems
+
+## ⚠️ 2026-06-11 baseline sweep #1 作废（基础设施问题，非任务真失败）——关键发现
+
+跑了 18 题 Claude sonnet-4.6 baseline（concurrency 3），结果**大部分作废**，三类基础设施问题：
+
+| 结果 | 题数 | 有效? |
+|---|---|---|
+| `completed` 真分（financial_stmt=1.0；legal=0.55 来自 smoke） | 2 | ✅ |
+| `failed` — **OpenRouter 余额耗尽**（"can only afford N tokens"） | ~16 | ❌ |
+| `failed` — eval 需 `OPENAI_API_KEY`（LLM-judge 判分，pe_screening） | 1+ | ❌ |
+
+**硬数据（OpenRouter API /credits）：充值 $5.00，已用 $5.06，剩 -$0.06——全部烧光。** $5 被 demo + smoke + financial_stmt + 其余题的部分 token 烧完后，剩下的题全部因没钱付 token 而 `agent failed (rc=1)`。
+
+**关键成本发现（这就是质量×成本表「Claude 贵」那一半）：agentic `claude_code` harness 跑 sonnet-4.6 极耗 token，约 $1-2/题。** 18 题 baseline ≈ $18-36，候选便宜模型另算（便宜得多）。
+
+**第二个坑：10/18 题（grep 上限，含噪）的判分用 OpenAI LLM-judge，而 `.env` 里 `OPENAI_API_KEY` 为空** → 这些题 agent 跑完但判分崩（pe_screening 实证）。financial_stmt 虽被 grep 命中但其实是确定性判分（30/30 字段），所以真正依赖 judge 的 ≤10。
+
+**好消息：GCP 侧完美**——n2-first patch 生效、provision 2-8min、teardown 干净、0 容量/配额报错。卡点纯粹是 LLM 预算 + OpenAI judge key。
+
+**修复（都在用户侧）：① OpenRouter 充值（建议 $30-40 跑完整 v0）；② 设真 OPENAI_API_KEY（启用 judge 题）或把子集限定为确定性判分题。** 决策见与用户的 checkpoint。
+
+| 日期 | 步骤 | 动作 | 结果 | 备注 |
+|---|---|---|---|---|
+| 06-11 | n2-first patch | `_machine_chain` 对 c 族先试 n2 | ✅ VM 首试 n2-standard-4 即起、无 c4 浪费 | HDB 配额被拒（auto-grant 没批），故走 n2+pd-ssd |
+| 06-11 | baseline sweep #1 | 18 题 × sonnet-4.6，concurrency 3 | ❌ 作废：OpenRouter $5 耗尽 + OPENAI key 空 | 见上表；infra 本身 OK |
+| 06-11 | 修 OPENAI key + 充值 | 用户充 OpenRouter 到 $15、加 OpenAI key | ✅ OpenAI key 有效（pe_screening eval=success，judge 修好） | |
+| 06-11 | calibration batch（5 题） | 测真实成本 + 验 judge key | ⚠️ 5 题全 failed score=0.0，但**根因是 OpenRouter KEY 自带 $5 上限**（非账户余额）：`key limit=5, usage=6.13, remaining=0.01`，账户却还剩 $8.87。充值被 key 上限架空 | **真·根因** |
+| 06-11 | **关键成本数据** | pe_screening 完整跑了 $0.69（933KB transcript，cache_read 720K tokens 占大头、0.1× 价） | **sonnet-4.6 agentic ≈ $0.69/题**（比先前 $1-2 估计便宜，prompt caching 之功）→ 18 题 baseline ≈ $12 | 填质量×成本表用 |
+
+**待用户：去 OpenRouter Keys 页把 key 的 $5 spending limit 去掉/调到 ~$40（账户余额够、key 上限是真闸）。**
+
+## ✅ 2026-06-11 Claude baseline 完成（18 题）+ 候选 sweep 启动
+
+**根因修复回顾（本轮所有"失败"的真因，已全解）：**
+- OpenRouter **key 自带 $5→$10→$20→$35 上限** + **账户余额**双重闸（非容量/代码）；topped 到账户 $20+、key $35 后顺畅。
+- OpenAI judge key 补上 → 10/18 judge 题判分正常。
+- per-task 成本实测：**Claude sonnet-4.6 ≈ $0.69/题**（cache 占大头）。
+
+**Claude sonnet-4.6 baseline（18 题，N=18，mean=0.664，median=0.683）：**
+
+| score | task |
+|---|---|
+| 1.000 | financial_stmt_reconstruction_aapl_fy2024 |
+| 1.000 | os_log_permission_guard_v1 |
+| 1.000 | tcga_brca_deg_analysis |
+| 1.000 | capacitated_vehicle_routing_problems |
+| 0.911 | bpmn_supply_disruption_l3 |
+| 0.900 | pe_screening_memo_1 |
+| 0.873 | k8s_payment_api_root_cause_analysis |
+| 0.706 | homework_grading_numerical_pdes_instance_02 |
+| 0.700 | cp_test_gen_1 |
+| 0.667 | recsys_cold_start_instance_1 |
+| 0.589 | crf_sdtm_mapping_4 |
+| 0.553 | agora_governance_classify_instance_1 |
+| 0.538 | nhanes_confounder_sensitivity_analysis |
+| 0.504 | cell_tracking_instance_1 |
+| 0.500 | molecular_structure_plausibility |
+| 0.335 | synthetic_causal_structure_inference |
+| 0.178 | causal_ihdp_ite_estimation_6a_v1 |
+| 0.000 | epidemiology_forecast |
+
+**候选 sweep（启动）：** 4 个便宜模型 × 18 题 = 72 跑（cand_sweep.yaml，concurrency 3，约 8-10h 跑完）。候选取 cheap-swap-cheatsheet.pdf 的 agentic 编程行：`deepseek/deepseek-v3.2` · `qwen/qwen3-coder` · `z-ai/glm-4.6` · `moonshotai/kimi-k2`（vs Claude $3/$15·M，便宜 ~5-44×）。harness 固定 claude_code，只换 model:，provider 仍 openrouter（干净单变量）。
+- **deepseek 验证（2 题，并已查证非集成 bug）：**
+  - `os_log_permission_guard_v1`：status=completed，**score 0.0**（Claude 1.0）。
+  - `cp_test_gen_1`：status=failed(rc=1)，**score 0.0**（Claude 0.7），花 $0.195。
+  - **是否「集成坏了」的查证（用户要求）→ 不是，是真实任务失败：** deepseek 确实驱动了 harness——os_log 跑了 **66 次 tool call、3 次 Write、0 个 tool error**（`is_error:true`=0），也引用了正确的 output 路径；但 eval 报告白纸黑字 `errors: ['missing output/final_state.json']`——deepseek 写了 3 个别的文件、**就是没产出任务要求的 `final_state.json`**。Claude 同题产齐 5 个 output 文件→1.0。即：harness 调通、模型真在做，只是**做不出要求的交付物**——印证 cheatsheet「deepseek 工具调用弱、别当 agent 控制脑」。是真实结果，非 bug。候选对比有效。
+
+| 日期 | 步骤 | 动作 | 结果 | 备注 |
+|---|---|---|---|---|
+| 06-11 | Claude baseline 收官 | batch4 跑最后 3 题 | ✅ 18/18 完成，mean 0.664 | |
+| 06-11 | 候选 sweep 启动 | cand_sweep.yaml 4 模型 × 18 题 | ⏳ 72 跑进行中（bg b6o6x0zi4） | 约 8-10h，Fri 5PM 前出全表 |
+
+## ⚠️ 2026-06-11 候选 sweep 完成 + kimi 数据作废（key-limit 403，需重跑）
+
+**候选 sweep 结果（72 跑完成，3/4 干净）：**
+| 模型 | done | mean | vs Claude 0.664 | 状态 |
+|---|---|---|---|---|
+| deepseek-v3.2 | 16 | 0.442 | 67% | ✅ 有效 |
+| qwen3-coder | 17 | 0.361 | 54% | ✅ 有效 |
+| glm-4.6 | 17 | 0.419 | 63% | ✅ 有效 |
+| kimi-k2 | 5 有效 / 13 废 | 0.138（废） | — | ⚠️ 重跑 |
+
+**kimi 作废根因（监控抓到的异常）：** kimi 在 sweep 里排最后（deepseek→qwen→glm→kimi），跑到它时 **OpenRouter key 已撞 $35 上限**（用户后来才提到 $60）→ 11 个 kimi run 秒收 `403 "Key limit exceeded (total limit)"`、transcript 仅 ~3KB（真 run 是 30KB-1MB）。另 2 个非 403（bpmn rc=1 真长跑失败、crf_sdtm ALE `write_file binary` 错）。→ kimi 0.138 是预算假象、非真实力。**只有 kimi 中招**（deepseek/qwen/glm 跑在前、预算未尽，failure 是真失败）。
+
+**我的 watchdog 漏报（记下教训）：** throttle 检测只 grep `"can only afford"`，但这次的限流错是 `"Key limit exceeded (total limit)"` / 403——字符串不同，没抓到。**修：throttle 检测要同时匹配 `Key limit exceeded`、`403`、`can only afford`。**
+
+**「时长几小时」虚惊查证：** qwen cell_tracking total_duration 408min，但拆事件看 **438min 全卡在 `provision_wait`（concurrency 3、72 单元排队），真 agent 只跑 19min**。非僵尸 VM、非 wall_time 失控，纯排队。
+
+**成本现实：** 整个 v0（baseline+候选）已用 ~$60（key 两次撞 $35/$60 上限）。比先前 $50 估计高——印证便宜模型 token 低效。
+
+| 日期 | 步骤 | 动作 | 结果 | 备注 |
+|---|---|---|---|---|
+| 06-11 | 候选 sweep 完成 | 72 跑（4 模型×18） | deepseek/qwen/glm 干净；kimi 13 废 | key-limit 403 |
+| 06-11 | kimi 重跑（暂存） | cand_kimi.yaml，13 个失败题 | ⏳ 待 key 上限提到 ~$75 | account $14.99 够，key $0 headroom 是闸 |
+
+## ✅✅ 2026-06-12 v0 质量×成本表（**已逐项 audit 修正**）
+
+**成本口径：** 每个 run 真实 token 数 × 该模型**真实 OpenRouter 单价**（cache_read×0.1、cache_create×1.25），**不是** transcript 的 Claude 计价 total_cost_usd（那对便宜模型高估 7-14×：DeepSeek 13.9×、Qwen 13.4×、GLM 7.3×）。方法验证：Claude pe_screening 反算 $0.86 = CLI 自报 ✓。
+
+**主表（apples-to-apples：4 模型都跑完的 14 道公共题）：**
+| 模型 | quality | vs Claude | $/task | 便宜 |
+|---|---|---|---|---|
+| Claude sonnet-4.6 | 0.653 | 100% | $0.439 | 1× |
+| **GLM-4.6** | **0.497** | **76%** | $0.052 | **8.4×** |
+| DeepSeek V3.2 | 0.433 | 66% | $0.162 | 2.7× |
+| Qwen3-Coder | 0.377 | 58% | $0.209 | 2.1× |
+| Kimi K2 | 路由不可用，排除 | | | |
+
+**关键发现（修正后）：**
+1. 没有便宜模型追平 Claude——最高 GLM **76%**。
+2. **GLM-4.6 两条线都最优**：76% 质量（候选最高）+ ~8× 便宜。杀手锏 = token 效率（bpmn 同题 GLM 67K input vs DeepSeek 3.3M，实测 49.8×）；DeepSeek 单价低但只省 2.7×。
+3. **⚠️ audit 修正了三处错误**（定稿前抓出）：① **DeepSeek 假性领先**——全集它 66% 看似 > GLM 63%，但只因它跳过了两道做不出的难题被无形加分；公共 14 题上 GLM 76% 才真领先。② 一处**伪成本对账**（原写 $23+$37=$60 ✓ 是错的，实际账单 $67.35，差额是 demo/验证/重试 run，非"失败 run"）——已删。③ 倍数四舍五入（3×→实 2.7×；12×→实 8.4×/全集 11.6×）。
+4. **Kimi K2 经 OpenRouter+claude_code 不可用**：限流(403)修复后仍撞 provider 400，完成的近 0 分。对 BFC gateway 有意义。
+5. **方法学教训：** 跨模型比必须用「都跑完的公共题集」，否则跳题=假性加分；对 Han/对外尤其要守。
+
+**全集数字（N 不等，不可直接比，仅附录）：** Claude 0.664(18) / DeepSeek 0.442(16) / GLM 0.419(17) / Qwen 0.361(17) / Kimi 0.053(15)。
+**实际成本：** OpenRouter 账单 $67.35 + GCP ~$10-13（估）≈ $77-80。
+
+| 日期 | 步骤 | 结果 |
+|---|---|---|
+| 06-12 | 编质量×成本表 + 逐项 audit | ✅ 主表用公共 14 题 apples-to-apples；audit 纠正 3 处错误后定稿；报告 `career-ops/projects/bfc/v0-results-zh.md` |
+
 ## 运行流水（每跑一步追加）
 
 | 日期 | 步骤 | 命令 / 动作 | 结果 | bug? |
