@@ -1,0 +1,260 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><style>
+@page { size: A4; margin: 18mm 16mm 18mm 16mm; }
+* { box-sizing: border-box; }
+body {
+  font-family: "PingFang SC","Hiragino Sans GB","Microsoft YaHei",-apple-system,
+               "Helvetica Neue",Arial,sans-serif;
+  color: #1f2328; line-height: 1.65; font-size: 13.5px;
+  max-width: 820px; margin: 0 auto; padding: 8px 4px;
+  -webkit-font-smoothing: antialiased;
+}
+h1 { font-size: 23px; font-weight: 700; margin: 6px 0 2px; color:#111; }
+h2 { font-size: 16.5px; font-weight: 700; margin: 22px 0 8px; padding-bottom:5px;
+     border-bottom: 2px solid #e6e8eb; color:#111; }
+h3 { font-size: 14px; font-weight: 700; margin: 16px 0 6px; }
+p { margin: 7px 0; }
+strong { color:#0b1f3a; font-weight:700; }
+a { color:#2563eb; text-decoration:none; word-break:break-all; }
+ul,ol { margin: 6px 0 6px 0; padding-left: 22px; }
+li { margin: 3px 0; }
+hr { border:0; border-top:1px solid #e6e8eb; margin:18px 0; }
+code { background:#f3f4f6; padding:1px 5px; border-radius:4px;
+       font-family:"SF Mono",Menlo,Consolas,monospace; font-size:0.88em; color:#b1003a; }
+blockquote { margin:10px 0; padding:8px 14px; background:#fff8e6;
+             border-left:4px solid #f0b400; color:#5a4a00; border-radius:0 4px 4px 0; }
+table { border-collapse:collapse; width:100%; margin:12px 0; font-size:12.5px;
+        page-break-inside:avoid; }
+th,td { border:1px solid #d8dce0; padding:7px 10px; text-align:left; vertical-align:top; }
+th { background:#0b1f3a; color:#fff; font-weight:600; }
+tr:nth-child(even) td { background:#f7f9fb; }
+table strong { color:#0b6b3a; }
+h2,h3 { page-break-after:avoid; }
+</style></head><body><h1>Agent 平替 v0 —— 结果报告</h1>
+<p>Elena（PM）｜2026-06-12｜pilot #1：agent 平替
+（上游：v0-team-report-zh.md = 跑之前的计划；本篇 = 跑完之后的结果。所有数字已对 run 数据逐项 audit，见 §3。）</p>
+<hr />
+<h2>0. 结论</h2>
+<p><strong>在公开 agent 基准（ALE）的真任务上跑出第一张「质量 × 成本」表。结论：没有便宜模型在质量上追平 Claude（最好 GLM-4.6 ≈ 76%），但 GLM-4.6 在「质量」和「成本」两条线上都是最优候选——76% 质量、约 8× 便宜——足以支撑「便宜模型扛日常、Claude 留难题 + 终审」的 hybrid 路由。</strong> v0 量化了「替谁、省多少、何时回退」——这正是 BFC gateway「Smart Cost Routing」缺的那层。</p>
+<hr />
+<h2>1. 结果：质量 × 成本表</h2>
+<p><strong>主表（apples-to-apples：取 4 个模型都跑完的 14 道公共题，口径一致可比）</strong></p>
+<table>
+<thead>
+<tr>
+<th>模型</th>
+<th>质量（mean score）</th>
+<th>vs Claude 质量</th>
+<th>成本（$/题）</th>
+<th>便宜倍数</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Claude sonnet-4.6（基准）</strong></td>
+<td><strong>0.653</strong></td>
+<td>100%</td>
+<td>$0.439</td>
+<td>1×</td>
+</tr>
+<tr>
+<td><strong>GLM-4.6</strong></td>
+<td><strong>0.497</strong></td>
+<td><strong>76%</strong></td>
+<td><strong>$0.052</strong></td>
+<td><strong>8.4×</strong></td>
+</tr>
+<tr>
+<td>DeepSeek V3.2</td>
+<td>0.433</td>
+<td>66%</td>
+<td>$0.162</td>
+<td>2.7×</td>
+</tr>
+<tr>
+<td>Qwen3-Coder</td>
+<td>0.377</td>
+<td>58%</td>
+<td>$0.209</td>
+<td>2.1×</td>
+</tr>
+<tr>
+<td>Kimi K2</td>
+<td>—〔路由不可用，见 §2③〕</td>
+<td>—</td>
+<td>—</td>
+<td>—</td>
+</tr>
+</tbody>
+</table>
+<p>口径说明：</p>
+<ul>
+<li><strong>质量</strong> = ALE <code>ale_run</code> 自动判分的 per-run 得分（确定性判分为主，部分题用 LLM-judge），同一批题、跨模型可比。</li>
+<li><strong>成本</strong> = 每个 run 的真实 token 数 × 该模型<strong>真实 OpenRouter 单价</strong>（cache_read×0.1、cache_create×1.25）算出；<strong>不是</strong> harness 里按 Claude 计价的估值（那个对便宜模型会高估 ~7-14×，见 §3）。</li>
+<li>全部模型 harness 固定 <code>claude_code</code>、只换 <code>model:</code>，干净单变量。</li>
+<li><strong>为什么用 14 道公共题：</strong> 各模型完成数不同（Claude 18 / DeepSeek 16 / GLM 17 / Qwen 17），失败题各异；只在「都跑完」的题上比才公平。全集数字见 §6 附录。</li>
+</ul>
+<hr />
+<h2>2. 关键发现</h2>
+<p><strong>① 没有便宜模型追平 Claude 的质量（最高 GLM ≈ 76%）。</strong> 真 agentic 任务上（开终端、跑工具、产出可验证的交付物），便宜模型明显逊色。所以 v0 <strong>不</strong>支持「一个便宜模型整体替掉 Claude」，支持 <strong>hybrid</strong>。</p>
+<p><strong>② GLM-4.6 是唯一两条线都最优的候选：76% 质量（候选里最高）+ 约 8× 便宜。</strong> 成本优势的杀手锏是 <strong>token 效率</strong>，不是单价标签：同一道题（pe_screening，两个模型都真跑出了结果），GLM 质量更高（0.944 vs 0.869）、input token 只用 ~126K，DeepSeek 烧了 ~1.76M（13.9×）；折算成本 GLM $0.09 vs DeepSeek $0.41。关键：<strong>DeepSeek 的 input 单价其实更低（$0.23 vs GLM $0.43/M），却因 token 爆炸 per-task 反而贵 4×</strong>。所以全集层面 DeepSeek 单价低也只省 2.7×，GLM 省 8×+。<strong>「便不便宜」= token 效率 × 单价，不能只看单价。</strong></p>
+<p><strong>③ Kimi K2 经 OpenRouter + claude_code 路由不可用（对 gateway 有直接意义）。</strong> 修掉限流后，kimi 仍持续撞 provider 端 <code>400 invalid request</code>，能跑完的也近 0 分（全集 mean 0.053）。说明：<strong>不是每个「便宜模型」都能干净地通过 gateway 的 Anthropic-compat 端点驱动 agent harness</strong>——正是 BFC「Smart Cost Routing」要替客户挡掉的坑（路由前先验证「这个模型 × 这个 harness」真能跑）。</p>
+<p><strong>④ 方法学教训（audit 才发现的，值得团队记住）：</strong> 比模型必须在「都跑完的公共题集」上比。若用「各自完成题的全集」，DeepSeek 会假性领先（66% &gt; GLM 63%）——因为它<strong>跳过了两道自己做不出来的难题</strong>、被无形加分；在同一批 14 道题上，GLM（76%）才是真领先。<strong>报告口径会直接改变结论，这点对对外话术尤其要明确。</strong></p>
+<p><strong>⑤ 战略含义：hybrid 路由 + 「先验证能跑、再按性价比路由」。</strong> 便宜模型（首选 GLM-4.6）扛能扛的，Claude 留难题 + 终审。v0 这张表就是这套路由的「上游分类器」雏形——ALE 方法学做离线分级，BFC 真实流量再在线细化。</p>
+<hr />
+<h2>3. 可信度：数字怎么来 + audit 过程</h2>
+<ul>
+<li><strong>成本方法已验证：</strong> 用 token×单价的公式反算 Claude 单题 = $0.86，与 harness 自报的 total_cost_usd <strong>完全一致</strong> ✓。便宜模型则用各自真实单价套同一公式。</li>
+<li><strong>不用 harness 自报成本：</strong> 它对所有模型都按 Claude 价计，对便宜模型高估 7-14×（实测 DeepSeek 13.9×、Qwen 13.4×、GLM 7.3×），故弃用、改自算。</li>
+<li><strong>逐项 audit 过：</strong> 表内每个质量分、成本、token 数都回溯到具体 run 重算；audit 中纠正了三处（DeepSeek 假性领先、一处错误的成本对账、若干倍数四舍五入），才定稿本表。</li>
+<li><strong>OpenRouter 实际账单 = $67.35</strong>（含全程 demo / smoke / 验证 / 限流重试等所有 run，不止主表的那批），表内主跑成本只是其中一部分——账单更高是因为踩坑重试多（见 §4）。</li>
+<li><strong>每个数字可回溯</strong>到 repo <code>run-log.md</code> 的 run 记录。</li>
+</ul>
+<hr />
+<h2>4. 工程证据：真跑出来的问题（不是看文档想象的）</h2>
+<ul>
+<li><strong>⭐ 发现并修复 ALE 自身一个 reliability bug：</strong> 它的 zone 容量错误分类函数漏判 GCP 最常见的容量错误（YAML 折行 + 错误码子串不匹配），导致 VM 跨 zone 回退<strong>从不触发</strong>、一个 zone 缺货就整轮失败。已定位根因、本地修复、写单测验证。（详见 repo <code>findings.md</code>，是否回报 Han 待团队定。）</li>
+<li><strong>新 GCP 项目配额墙：</strong> image 600GB pd-ssd/hyperdisk 超过新项目默认配额（SSD/HDB 各 500GB），逐一申请提额解决。</li>
+<li><strong>8-vCPU 容量随负载波动</strong>（观察到晚间缺货、清晨可用）→ 真任务 sweep 错峰跑。</li>
+<li>这些都不影响判分/模型对比（纯基础设施重试层）。</li>
+</ul>
+<hr />
+<h2>5. 局限</h2>
+<ul>
+<li><strong>ALE 分布 ≠ 我们的真实流量。</strong> v0 是公开基准上的「能力分级 + 短名单」，<strong>不</strong>等于「在 BFC 客户真实 agent 流量上能替」——要等真实使用数据接力。对外只标「公开基准测得」。</li>
+<li><strong>样本量小：</strong> 公共题集 N=14（全集 N=16-18），near-term 本身分数有噪——<strong>趋势可信，绝对值待更大 N 收敛</strong>。</li>
+<li><strong>任务集：</strong> Linux（cpu-free-ubuntu）near-term 一档；Windows / GPU / 更大 N 留待扩展。</li>
+<li><strong>Kimi 数据不作结论</strong>（路由不可用）。</li>
+</ul>
+<hr />
+<h2>6. 给团队/Paul 的决策点</h2>
+<ol>
+<li><strong>锁达标线（替换门槛）—— 已备参考方案，请 Paul 拍板或微调：</strong></li>
+</ol>
+<p><strong>框架：</strong> 一个便宜模型「达标 / 进短名单」= 质量 ≥ Claude 的 <strong>X%</strong> 且 成本 ≤ Claude 的 <strong>1/Y</strong>，两条线都过才算。</p>
+<p><strong>套到本表（公共 14 题）的三档参考：</strong></p>
+<table>
+<thead>
+<tr>
+<th>档位</th>
+<th>质量门槛 X</th>
+<th>成本门槛 1/Y</th>
+<th>过线模型</th>
+<th>解读</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>保守（低风险）</td>
+<td>≥ 85%</td>
+<td>≤ 1/2</td>
+<td>（无）</td>
+<td>现有便宜模型都不够；需更强模型或 per-task 路由</td>
+</tr>
+<tr>
+<td><strong>中（建议默认）</strong></td>
+<td><strong>≥ 70%</strong></td>
+<td><strong>≤ 1/3</strong></td>
+<td><strong>仅 GLM-4.6</strong></td>
+<td>GLM 进短名单，扛能扛的、Claude 兜底</td>
+</tr>
+<tr>
+<td>激进（高省钱）</td>
+<td>≥ 60%</td>
+<td>≤ 1/2</td>
+<td>GLM-4.6 + DeepSeek</td>
+<td>省更多，但回退多、质量波动大</td>
+</tr>
+<tr>
+<td>- <strong>为什么默认 70% / 3×：</strong> GLM 在这条线上<strong>两项都过</strong>（76%、8.4×），DeepSeek（66%）/ Qwen（58%）质量不过线——一刀切下来短名单干净 = 只有 GLM，决策最清晰、对外最好讲。</td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>- <strong>这只是粗筛门槛（选谁进短名单）。</strong> 真正的 hybrid 路由是<strong>按题 / 按 task_type</strong> 判——「便宜模型默认跑，单题没过就回退 Claude」，不是看总均值。v0 已存每道题的分数，<strong>v0.1 能据此估算「混合路由的实际省钱率」</strong>，再把 X/Y 细化成 per-task 策略。</td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>- <strong>请 Paul 定：</strong> 采用默认 70% / 3×（→ 短名单 = GLM），还是按业务可接受风险上调（保守）/下调（激进）？</td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<ol start="2">
+<li><strong>扩展范围：</strong> 是否扩到 Windows/GPU 题、加大 N、加候选（含直连 Kimi 原生端点重测）。</li>
+<li><strong>成本：</strong> 整个 v0 实跑 = <strong>OpenRouter $67 + GCP ~$10-13（估算，账单滞后）≈ $77-80</strong>，均为公司 pilot 基础设施开销，已逐项留账，需报销。</li>
+</ol>
+<hr />
+<h2>7. 下一步（谁做什么）</h2>
+<p><strong>立即 · 本周</strong></p>
+<ul>
+<li><strong>Paul（决策，阻塞后续）：</strong> 拍板「达标线」档位——参考方案见 §6.1（建议默认 70% / 3× → 短名单 = GLM，另备保守 / 激进两档），确认或微调即可。这是出短名单 / 路由建议的前置门槛，定不下来后面只能停在「数据」、到不了「建议」。</li>
+<li><strong>Elena（PM）：</strong> ① v0 收尾交付（本报告 + repo：run-log 全程证据 / findings bug 写报 / 质量×成本表）；② Paul 一锁达标线，立即套表、产出 v0.1「短名单 + 路由建议」（谁能替、何时回退）。</li>
+</ul>
+<p><strong>接下来 · v0.1 与扩展（PM 主导，需队友配合）</strong></p>
+<ul>
+<li><strong>Elena（PM）：</strong> ① 扩任务集——加 Windows/GPU 题、加大 N 降噪（当前公共集 N=14 偏小）；② Kimi 直连原生端点重测，排除是 OpenRouter 路由问题还是模型本身；③ 按需出英文版报告。</li>
+<li><strong>Han（ALE 作者）配合：</strong> ① 确认 per-run 判分口径是否就是我们用的这套；② ALE 私有题库未来对我们的可用范围。</li>
+<li><strong>Abby 配合：</strong> ① 各候选模型的官方计费价格表，核对我们自算的成本；② 能否从令牌 / 渠道反推 task_type；③ 线上有无现成的成败信号——为「真实流量阶段」铺路。</li>
+</ul>
+<p><strong>真实流量阶段 · 接力</strong></p>
+<ul>
+<li><strong>Elena × SDE：</strong> 对齐线上 agent 流量的打点字段（哪类任务、用了哪个模型 × harness、成没成、花多少），把「公开基准离线分级」过渡到「自有流量在线细化」——从 v0「能不能替」走向产品「实时路由」的关键一跳。</li>
+</ul>
+<hr />
+<h2>附录：全集数字（N 不等，仅供参考，<strong>不</strong>作为可比结论）</h2>
+<table>
+<thead>
+<tr>
+<th>模型</th>
+<th>N</th>
+<th>全集 mean</th>
+<th>注</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Claude sonnet-4.6</td>
+<td>18</td>
+<td>0.664</td>
+<td></td>
+</tr>
+<tr>
+<td>DeepSeek V3.2</td>
+<td>16</td>
+<td>0.442</td>
+<td>缺 cp_test、recsys（失败）</td>
+</tr>
+<tr>
+<td>GLM-4.6</td>
+<td>17</td>
+<td>0.419</td>
+<td>缺 nhanes（失败）</td>
+</tr>
+<tr>
+<td>Qwen3-Coder</td>
+<td>17</td>
+<td>0.361</td>
+<td>缺 bpmn（失败）</td>
+</tr>
+<tr>
+<td>Kimi K2</td>
+<td>15</td>
+<td>0.053</td>
+<td>路由不可用，存疑</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>⚠️ 全集 N 不等、缺的题各异，<strong>跨模型不可直接比</strong>（DeepSeek 因跳过难题会假性偏高）。结论一律以 §1 主表（公共 14 题）为准。</p>
+</blockquote>
+<hr />
+<p><em>数据与全程证据：repo <code>agent-eval-v0</code>（run-log.md / findings.md）。本报告为团队同步，英文版可按需生成。</em></p>
+<p><strong>Repo：</strong> https://github.com/yingshill/agent-eval-v0</p></body></html>
