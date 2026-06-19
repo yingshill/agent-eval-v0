@@ -1,0 +1,180 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><style>
+@page { size: A4; margin: 18mm 16mm 18mm 16mm; }
+* { box-sizing: border-box; }
+body {
+  font-family: "PingFang SC","Hiragino Sans GB","Microsoft YaHei",-apple-system,
+               "Helvetica Neue",Arial,sans-serif;
+  color: #1f2328; line-height: 1.65; font-size: 13.5px;
+  max-width: 820px; margin: 0 auto; padding: 8px 4px;
+  -webkit-font-smoothing: antialiased;
+}
+h1 { font-size: 23px; font-weight: 700; margin: 6px 0 2px; color:#111; }
+h2 { font-size: 16.5px; font-weight: 700; margin: 22px 0 8px; padding-bottom:5px;
+     border-bottom: 2px solid #e6e8eb; color:#111; }
+h3 { font-size: 14px; font-weight: 700; margin: 16px 0 6px; }
+p { margin: 7px 0; }
+strong { color:#0b1f3a; font-weight:700; }
+a { color:#2563eb; text-decoration:none; word-break:break-all; }
+ul,ol { margin: 6px 0 6px 0; padding-left: 22px; }
+li { margin: 3px 0; }
+hr { border:0; border-top:1px solid #e6e8eb; margin:18px 0; }
+code { background:#f3f4f6; padding:1px 5px; border-radius:4px;
+       font-family:"SF Mono",Menlo,Consolas,monospace; font-size:0.88em; color:#b1003a; }
+blockquote { margin:10px 0; padding:8px 14px; background:#fff8e6;
+             border-left:4px solid #f0b400; color:#5a4a00; border-radius:0 4px 4px 0; }
+table { border-collapse:collapse; width:100%; margin:12px 0; font-size:12.5px;
+        page-break-inside:avoid; }
+th,td { border:1px solid #d8dce0; padding:7px 10px; text-align:left; vertical-align:top; }
+th { background:#0b1f3a; color:#fff; font-weight:600; }
+tr:nth-child(even) td { background:#f7f9fb; }
+table strong { color:#0b6b3a; }
+h2,h3 { page-break-after:avoid; }
+</style></head><body><h1>Agent 平替 v0.1 —— 短名单 + 路由建议</h1>
+<ul>
+<li>你在看：<strong>v0.1 结果报告</strong> —— 套上达标线后的短名单 + per-task 路由 + 混合省钱率</li>
+<li>上游：<a href="v0-results-zh.md">v0 结果报告</a> —— 质量 × 成本表（跑完之后的结果）</li>
+<li>底表：<a href="v0-per-task-matrix.csv">per-task 矩阵 CSV</a> —— 18×4（score + token + $），本报告所有数字的来源</li>
+<li>
+<p>证据：<a href="../run-log.md">run-log</a> · bug 写报：<a href="../findings.md">findings</a></p>
+</li>
+<li>
+<p>达标线：Paul 锁定 <strong>质量 ≥ 70% / 成本 ≤ ½</strong>（起步值，见 <a href="../DECISIONS.md">DECISIONS</a>）</p>
+</li>
+<li>口径：common-14 公共题集，与 v0 主表一致、跨模型可比</li>
+<li>数字：均已对底表逐项重算、可回溯</li>
+</ul>
+<hr />
+<h2>0. 结论</h2>
+<p><strong>在 Paul 锁定的达标线（质量 ≥ 70% / 成本 ≤ ½）下，便宜模型短名单 = 仅 GLM-4.6。</strong> 但真正的产品结论不在「换不换 GLM」，而在<strong>怎么路由</strong>：</p>
+<ul>
+<li>纯换 GLM（不路由）= <strong>76% 质量 / 省 8.4×</strong>；</li>
+<li>按题路由（难题回退 Claude）= <strong>99% 质量 / 省 ~2×</strong>。</li>
+</ul>
+<p><strong>后者几乎不丢质量、成本仍砍一半，且正落在 Paul 设的 ≤½ 线上</strong>——这就是 hybrid 路由要交付的甜区，也是 v0.1 把「能不能替」推进到「怎么替最划算」的一步。</p>
+<hr />
+<h2>1. 短名单：套达标线（common-14）</h2>
+<table>
+<thead>
+<tr>
+<th>模型</th>
+<th>质量</th>
+<th>=Claude</th>
+<th>$/题</th>
+<th>=Claude 成本</th>
+<th>便宜</th>
+<th>过线？</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Claude sonnet-4.6</td>
+<td>0.653</td>
+<td>100%</td>
+<td>$0.439</td>
+<td>1.00</td>
+<td>1×</td>
+<td>基准</td>
+</tr>
+<tr>
+<td><strong>GLM-4.6</strong></td>
+<td><strong>0.497</strong></td>
+<td><strong>76%</strong></td>
+<td><strong>$0.052</strong></td>
+<td><strong>0.12</strong></td>
+<td><strong>8.4×</strong></td>
+<td>✅ <strong>进短名单</strong></td>
+</tr>
+<tr>
+<td>DeepSeek V3.2</td>
+<td>0.433</td>
+<td>66%</td>
+<td>$0.162</td>
+<td>0.37</td>
+<td>2.7×</td>
+<td>❌ 质量不过</td>
+</tr>
+<tr>
+<td>Qwen3-Coder</td>
+<td>0.377</td>
+<td>58%</td>
+<td>$0.209</td>
+<td>0.48</td>
+<td>2.1×</td>
+<td>❌ 质量不过</td>
+</tr>
+</tbody>
+</table>
+<p><strong>质量是唯一筛子。</strong> DeepSeek / Qwen 的成本其实都已 ≤½，被卡的全在 70% 质量线——所以这条线下短名单干净（只有 GLM），对外最好讲：<strong>纯按质量筛掉，没有靠成本门槛硬卡。</strong></p>
+<hr />
+<h2>2. Per-task 分档：14 题里 10 道走 GLM、4 道留 Claude</h2>
+<p>逐题比 GLM 与 Claude（门槛：该题 GLM ≥ 70% × Claude）：</p>
+<ul>
+<li>🟢 <strong>GLM-safe ×10</strong> —— GLM 达标，直接走便宜。含 financial_stmt、pe_screening、os_log、tcga（多数 100%+），以及 k8s、homework、agora 等。</li>
+<li>🔴 <strong>Claude-only ×4</strong> —— GLM 明显做不出，留 Claude：</li>
+<li><code>causal_ihdp_ite_estimation</code>（Claude 0.178 / GLM 0.000）</li>
+<li><code>crf_sdtm_mapping</code>（0.589 / 0.000）</li>
+<li><code>molecular_structure_plausibility</code>（0.500 / 0.167）</li>
+<li><code>capacitated_vehicle_routing</code>（1.000 / 0.000）</li>
+</ul>
+<p><strong>含义：</strong> 路由不是「整体换 GLM」，是「按题分流」——这 10/4 的切分就是路由策略表的雏形。</p>
+<hr />
+<h2>3. 混合省钱曲线 ⭐（核心结论）</h2>
+<table>
+<thead>
+<tr>
+<th>策略</th>
+<th>质量</th>
+<th>=Claude</th>
+<th>$/题</th>
+<th>便宜</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>全 Claude（基准）</td>
+<td>0.653</td>
+<td>100%</td>
+<td>$0.439</td>
+<td>1×</td>
+</tr>
+<tr>
+<td>纯 GLM（不路由）</td>
+<td>0.497</td>
+<td>76%</td>
+<td>$0.052</td>
+<td>8.4×</td>
+</tr>
+<tr>
+<td><strong>Per-task 混合 / verify 兜底</strong></td>
+<td><strong>0.647</strong></td>
+<td><strong>99%</strong></td>
+<td><strong>~$0.22</strong></td>
+<td><strong>~2×</strong></td>
+</tr>
+</tbody>
+</table>
+<p><strong>一句话：</strong> 纯换 GLM 丢掉 24% 质量换 8.4× 便宜；<strong>按题路由只丢 1% 质量，仍省 ~2×</strong>——难题回退 Claude，几乎不丢质量、成本砍半。而且这个混合点<strong>正落在 Paul 设的 ≤½ 成本线上</strong>（0.5× cost / 99% 质量），说明他这条起步线在 per-task 混合下是<strong>可达的甜区</strong>，不是空设。</p>
+<blockquote>
+<p>路由机制：便宜模型先跑 → 自动判分 → 没过回退 Claude（verify-then-route）。质量与 oracle 分流持平（0.647），成本略高（$0.22，因为回退题付了两遍）。</p>
+</blockquote>
+<hr />
+<h2>4. 局限（必须如实标注）</h2>
+<ul>
+<li><strong>「99% / 2×」是可达上界，不是生产实测。</strong> 它是在 ALE 14 题上、用<strong>真实判分器</strong>模拟分流得到的；生产里没有现成判分器，实际落点取决于「分类器 + verify 代理」的准确度——会落在「纯 GLM 76%」与「上界 99%」之间。</li>
+<li><strong>样本小：</strong> common-14；趋势可信，绝对值待更大 N 收敛。</li>
+<li><strong>边角：</strong> epidemiology_forecast 两个模型都 0 分，被归入 GLM-safe（都失败→走便宜不丢质量），属正常处理、已知悉。</li>
+<li><strong>分布：</strong> 仍是 ALE 公开基准，≠ BFC 真实流量；最终要真实流量数据接力。</li>
+</ul>
+<hr />
+<h2>5. 下一步（谁做什么）</h2>
+<p><strong>SDE（用底表起路由，部分不卡门槛、可即刻开工）：</strong>
+- ① 用 <a href="v0-per-task-matrix.csv">per-task 矩阵 CSV</a> 复跑 §2 分档 + §3 曲线（脚本逻辑已 audit）；
+- ② 原型 <strong>verify-then-route</strong> 运行时机制（便宜先跑 → 判分 → 没过回退）——这是兜底层，不依赖门槛；
+- ③ 起草 <strong>lightweight 分类器</strong>方案（prompt → 任务类型 + 难度），带置信度、低置信默认留 Claude。</p>
+<p><strong>Elena（PM）：</strong>
+- ① 本报告 + 套表交付；② 扩 N / 加 Windows·GPU 题降噪；③ Kimi 直连原生端点重测。</p>
+<p><strong>Paul：</strong> ≤½ 是起步值——等 §3 的真实 blended 省钱率在更大 N 上稳了，再决定是否收紧（保守）或维持。</p>
+<p><strong>Han / Abby：</strong> Han 确认 per-run 判分口径 + 私有题库可用范围；Abby 提供各模型官方计费价核对、线上成败信号为真实流量阶段铺路。</p>
+<hr />
+<p><em>数据与全程证据：repo <code>agent-eval-v0</code>（<a href="v0-per-task-matrix.csv">底表 CSV</a> / <a href="../run-log.md">run-log</a> / <a href="../findings.md">findings</a>）。达标线决策见 <a href="../DECISIONS.md">DECISIONS</a>。</em></p>
+<p><strong>Repo：</strong> https://github.com/yingshill/agent-eval-v0</p></body></html>

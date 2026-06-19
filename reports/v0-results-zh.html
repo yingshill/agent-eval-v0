@@ -128,7 +128,7 @@ h2,h3 { page-break-after:avoid; }
 <hr />
 <h2>6. 给团队/Paul 的决策点</h2>
 <ol>
-<li><strong>锁达标线（替换门槛）—— 已备参考方案，请 Paul 拍板或微调：</strong></li>
+<li><strong>锁达标线（替换门槛）—— ✅ Paul 已锁定起步线（2026-06-18）：质量 ≥ 70% / 成本 ≤ ½。</strong></li>
 </ol>
 <p><strong>框架：</strong> 一个便宜模型「达标 / 进短名单」= 质量 ≥ Claude 的 <strong>X%</strong> 且 成本 ≤ Claude 的 <strong>1/Y</strong>，两条线都过才算。</p>
 <p><strong>套到本表（公共 14 题）的三档参考：</strong></p>
@@ -179,7 +179,14 @@ h2,h3 { page-break-after:avoid; }
 <td></td>
 </tr>
 <tr>
-<td>- <strong>请 Paul 定：</strong> 采用默认 70% / 3×（→ 短名单 = GLM），还是按业务可接受风险上调（保守）/下调（激进）？</td>
+<td>- <strong>Paul 已定（起步值）：质量 ≥ 70% / 成本 ≤ ½</strong> —— 质量门槛取「默认档」，成本门槛比默认更松（½ 而非 ⅓）。套表结果：<strong>短名单 = 仅 GLM</strong>（质量是唯一筛子，DeepSeek/Qwen 成本都已 ≤½、只卡质量）。</td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>- <strong>套表后的混合省钱率（v0.1）：</strong> 纯换 GLM = 76% 质量 / 省 8.4×；<strong>按题路由（难题回退 Claude）= 99% 质量 / 省 ~2×</strong>，正落在 ≤½ 成本线上。完整短名单 + per-task 分档 + 省钱曲线见 <a href="v0.1-results-zh.md">v0.1 结果报告</a>。</td>
 <td></td>
 <td></td>
 <td></td>
