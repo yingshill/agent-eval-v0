@@ -195,26 +195,23 @@ h2,h3 { page-break-after:avoid; }
 </tbody>
 </table>
 <ol start="2">
-<li><strong>扩展范围：</strong> 是否扩到 Windows/GPU 题、加大 N、加候选（含直连 Kimi 原生端点重测）。</li>
+<li><strong>范围（本阶段已定）：</strong> 这一阶段我们不扩 Windows/GPU 题、不加大 N、也不重测 Kimi。v0.1 的重心是把现有这 14 道题已经跑出的结论，变成一套能落地的路由策略，而不是把基准铺得更广。（Kimi 经 OpenRouter 路由不可用这个结论维持不变，不因为不重测而改变。）</li>
 <li><strong>成本：</strong> 整个 v0 实跑 = <strong>OpenRouter $67 + GCP ~$10-13（估算，账单滞后）≈ $77-80</strong>，均为公司 pilot 基础设施开销，已逐项留账，需报销。</li>
 </ol>
 <hr />
 <h2>7. 下一步（谁做什么）</h2>
 <p><strong>立即 · 本周</strong></p>
 <ul>
-<li><strong>Paul（决策，阻塞后续）：</strong> 拍板「达标线」档位——参考方案见 §6.1（建议默认 70% / 3× → 短名单 = GLM，另备保守 / 激进两档），确认或微调即可。这是出短名单 / 路由建议的前置门槛，定不下来后面只能停在「数据」、到不了「建议」。</li>
-<li><strong>Elena（PM）：</strong> ① v0 收尾交付（本报告 + repo：run-log 全程证据 / findings bug 写报 / 质量×成本表）；② Paul 一锁达标线，立即套表、产出 v0.1「短名单 + 路由建议」（谁能替、何时回退）。</li>
+<li><strong>Paul：</strong> 达标线已经锁定（质量 ≥ 70%、成本 ≤ ½，见 §6.1），这是一个起步值。它的作用是把「哪些便宜模型有资格进入生产路由」这件事定下来，按现有数据算，短名单只有 GLM。等 Abby 把按题路由的真实落点跑出来、或者接上真实流量数据之后，Paul 再判断这条线要收紧还是维持。</li>
+<li><strong>Elena（PM）：</strong> 负责 v0 与 v0.1 的交付——包括本报告、v0.1 的短名单与路由建议，以及 repo 里的全程证据（run-log 的逐 run 记录、findings 的 bug 写报、质量×成本底表）。英文版按团队需要再出。</li>
+<li><strong>Abby（SDE）：</strong> 把这份离线结论变成真正的路由系统。第一步，用 per-task 矩阵底表复跑一遍按题分档和混合省钱曲线，确认数字对得上（脚本逻辑已审计）。第二步，搭出 verify-then-route 的运行时原型——便宜模型先跑，自动判分，没过就回退 Claude；这一层是兜底机制，不依赖达标线，可以马上动手。第三步，起草一个轻量分类器的方案，把用户 prompt 判成任务类型与难度，并带上置信度，置信度低时默认把任务留给 Claude。</li>
 </ul>
-<p><strong>接下来 · v0.1 与扩展（PM 主导，需队友配合）</strong></p>
+<p><strong>接下来 · 真实流量阶段</strong></p>
 <ul>
-<li><strong>Elena（PM）：</strong> ① 扩任务集——加 Windows/GPU 题、加大 N 降噪（当前公共集 N=14 偏小）；② Kimi 直连原生端点重测，排除是 OpenRouter 路由问题还是模型本身；③ 按需出英文版报告。</li>
-<li><strong>Han（ALE 作者）配合：</strong> ① 确认 per-run 判分口径是否就是我们用的这套；② ALE 私有题库未来对我们的可用范围。</li>
-<li><strong>Abby 配合：</strong> ① 各候选模型的官方计费价格表，核对我们自算的成本；② 能否从令牌 / 渠道反推 task_type；③ 线上有无现成的成败信号——为「真实流量阶段」铺路。</li>
+<li><strong>Abby（SDE）：</strong> 一是拿各模型的官方计费价格，核对我们自算的成本；二是想办法从 token 或渠道反推任务类型；三是接入线上的成败信号、对齐打点字段（哪一类任务、用了哪个模型 × harness、成功与否、花了多少钱）。这三件事合起来，是把「在公开基准上离线分级」过渡到「在自有流量上在线细化」的关键一跳，也是从 v0 的「能不能替」走向产品级「实时路由」的核心。</li>
+<li><strong>Han（ALE 作者）：</strong> 确认我们用的 per-run 判分口径是否就是 ALE 的标准口径，以及 ALE 私有题库未来对我们的可用范围。</li>
 </ul>
-<p><strong>真实流量阶段 · 接力</strong></p>
-<ul>
-<li><strong>Elena × SDE：</strong> 对齐线上 agent 流量的打点字段（哪类任务、用了哪个模型 × harness、成没成、花多少），把「公开基准离线分级」过渡到「自有流量在线细化」——从 v0「能不能替」走向产品「实时路由」的关键一跳。</li>
-</ul>
+<p><strong>本阶段不做：</strong> 不扩 Windows/GPU 题、不加大 N、不重测 Kimi（见 DECISIONS）。</p>
 <hr />
 <h2>附录：全集数字（N 不等，仅供参考，<strong>不</strong>作为可比结论）</h2>
 <table>

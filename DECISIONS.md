@@ -17,3 +17,14 @@ Append-only log of significant decisions, recorded when made. Never delete; reve
 **Tradeoffs:** Clean, single-model short-list that is easy to defend externally (filtered purely on quality). The ½ cost bar is intentionally permissive as a *starting point* — to be tuned once blended-routing savings are known. Marked "starting point," so revisit after v0.1 quantifies the per-task blended frontier.
 
 ---
+
+## v0.1 scope: no benchmark expansion this phase
+**Date:** 2026-06-18
+**Context:** With the threshold locked and the per-task matrix in hand, the question was whether to spend the next effort broadening the benchmark (more tasks / N, Windows & GPU tiers, re-testing Kimi via its native endpoint) or to push the existing 14-task results into a usable routing system.
+**Options considered:**
+- Expand coverage first (larger N to cut noise, add Windows/GPU tasks, re-test Kimi natively to isolate routing-vs-model).
+- Hold coverage and convert the current results into routing (per-task tiers, verify-then-route, classifier).
+**Decision:** Hold coverage. This phase does **not** expand N, does **not** add Windows/GPU tasks, and does **not** re-test Kimi. The focus is turning the existing 14-task findings into a landable routing strategy. Kimi's "unusable via OpenRouter routing" conclusion stands as-is.
+**Tradeoffs:** Faster path to a working routing prototype and a concrete saving estimate, at the cost of leaving the small-N caveat (N=14) and the Windows/GPU/Kimi gaps open for a later phase. The real-traffic phase is expected to address noise and coverage more meaningfully than enlarging the public benchmark would.
+
+---
