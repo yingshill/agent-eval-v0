@@ -126,7 +126,7 @@ h2,h3 { page-break-after:avoid; }
 <hr />
 <h2>6. Decision points for the team / Paul</h2>
 <ol>
-<li><strong>Lock the bar (substitution threshold) — reference solution ready, Paul to confirm or adjust:</strong></li>
+<li><strong>Lock the bar (substitution threshold) — ✅ Paul locked the starting bar (2026-06-18): quality ≥ 70% / cost ≤ ½.</strong></li>
 </ol>
 <p><strong>Framework:</strong> a cheap model "qualifies / makes the short-list" if quality ≥ <strong>X%</strong> of Claude AND cost ≤ <strong>1/Y</strong> of Claude — both must pass.</p>
 <p><strong>Three reference tiers applied to this table (14 common tasks):</strong></p>
@@ -167,11 +167,12 @@ h2,h3 { page-break-after:avoid; }
 <ul>
 <li><strong>Why default 70% / 3×:</strong> GLM passes <strong>both</strong> (76%, 8.4×); DeepSeek (66%) / Qwen (58%) fail quality — a clean short-list of just GLM, easiest to decide and to defend externally.</li>
 <li><strong>This is only a coarse screen (who makes the short-list).</strong> Real hybrid routing is <strong>per-task / per-task-type</strong> — "cheap by default, fall back to Claude on tasks it fails" — not aggregate means. v0 already stores per-task scores, so <strong>v0.1 can estimate the actual blended saving</strong> and refine X/Y into a per-task policy.</li>
-<li><strong>Paul to decide:</strong> adopt default 70% / 3× (→ short-list = GLM), or slide up (conservative) / down (aggressive) by acceptable business risk?</li>
+<li><strong>Paul decided (starting value): quality ≥ 70% / cost ≤ ½</strong> — the quality bar is the "default" tier's, the cost bar is looser than the default (½ rather than ⅓). Applied to the table → <strong>short-list = GLM only</strong> (quality is the binding constraint; DeepSeek/Qwen already meet ≤½ and fail only on quality).</li>
+<li><strong>Blended savings after applying the bar (v0.1):</strong> pure GLM = 76% quality / 8.4× cheaper; <strong>routing per task (hard tasks fall back to Claude) = 99% quality / ~2× cheaper</strong>, landing right on the ≤½ cost line. The full short-list + per-task tiers + savings curve are in the <a href="v0.1-results-en.md">v0.1 results report</a>.</li>
 </ul>
 <ol start="2">
 <li>
-<p><strong>Expand scope:</strong> whether to add Windows/GPU tasks, increase N, add candidates (incl. re-testing Kimi via its native endpoint).</p>
+<p><strong>Scope (decided this phase):</strong> we do <strong>not</strong> expand Windows/GPU tasks, do <strong>not</strong> increase N, and do <strong>not</strong> re-test Kimi. v0.1 focuses on turning the existing 14-task findings into a landable routing strategy rather than broadening the benchmark. (Kimi's "unusable via OpenRouter routing" conclusion stands.)</p>
 </li>
 <li>
 <p><strong>Cost:</strong> the full v0 run = <strong>OpenRouter $67 + GCP ~$10–13 (estimated, billing lags) ≈ $77–80</strong>, all infrastructure cost for a company pilot, itemized — to be reimbursed.</p>
@@ -181,19 +182,16 @@ h2,h3 { page-break-after:avoid; }
 <h2>7. Next steps (who does what)</h2>
 <p><strong>Now · this week</strong></p>
 <ul>
-<li><strong>Paul (decision, blocks everything downstream):</strong> lock the bar — reference solution in §6.1 (recommended default 70% / 3× → short-list = GLM, with conservative/aggressive tiers also prepared), confirm or adjust. This is the prerequisite for the short-list / routing recommendation; until it's set, we stay at "data" and can't reach "recommendation."</li>
-<li><strong>Elena (PM):</strong> ① finalize v0 delivery (this report + repo: run-log evidence / findings bug writeup / quality×cost table); ② the moment Paul locks the bar, apply it and produce v0.1 "short-list + routing recommendation" (who can replace, when to fall back).</li>
+<li><strong>Paul:</strong> the bar is locked (quality ≥ 70%, cost ≤ ½, see §6.1) — a starting value. Its job is to settle which cheap models qualify for production routing; on the current data the short-list is GLM only. Once Abby has the real per-task routing results, or once we're on real traffic data, Paul decides whether to tighten the line or keep it.</li>
+<li><strong>Elena (PM):</strong> owns delivery of v0 and v0.1 — this report, the v0.1 short-list and routing recommendation, and the repo evidence trail (run-log's per-run records, the findings bug write-up, the quality×cost source table). English version produced as the team needs.</li>
+<li><strong>Abby (SDE):</strong> turn this offline conclusion into an actual routing system. First, reproduce the per-task tiers and the savings curve from the per-task source table to confirm the numbers (script logic audited). Second, prototype verify-then-route at runtime — the cheap model runs first, gets auto-scored, falls back to Claude if it doesn't pass; this safety-net layer doesn't depend on the bar and can start right away. Third, draft a lightweight-classifier design that classifies the user prompt into task type and difficulty with a confidence score, defaulting to Claude when confidence is low.</li>
 </ul>
-<p><strong>Next · v0.1 and expansion (PM-led, needs teammates)</strong></p>
+<p><strong>Next · real-traffic phase</strong></p>
 <ul>
-<li><strong>Elena (PM):</strong> ① expand the task set — add Windows/GPU tasks, increase N to cut noise (current common set N=14 is small); ② re-test Kimi via its native endpoint to isolate OpenRouter-routing vs the model itself; ③ produce an English report version as needed.</li>
-<li><strong>Han (ALE author), support:</strong> ① confirm whether the per-run scoring convention is the one we used; ② the future scope of ALE's private task set available to us.</li>
-<li><strong>Abby, support:</strong> ① official pricing tables for the candidate models, to check our recomputed costs; ② whether task_type can be inferred from tokens / channel; ③ whether any success/failure signal exists online — to pave the way for the real-traffic phase.</li>
+<li><strong>Abby (SDE):</strong> (1) check our recomputed costs against the models' official pricing; (2) infer task type from tokens / channel; (3) wire in online success/failure signals and align instrumentation (which task type, which model × harness, success or not, how much it cost). Together these are the leap from "offline tiering on a public benchmark" to "online refinement on our own traffic," and from v0's "can it replace" to a product-grade "real-time router."</li>
+<li><strong>Han (ALE author):</strong> confirm whether the per-run scoring convention is the one we used, and the future scope of ALE's private task set available to us.</li>
 </ul>
-<p><strong>Real-traffic phase · handoff</strong></p>
-<ul>
-<li><strong>Elena × SDE:</strong> align the instrumentation fields for live agent traffic (which task type, which model × harness, success or not, how much it cost), to move from "offline tiering on a public benchmark" to "online refinement on our own traffic" — the key leap from v0's "can it replace" to the product's "real-time routing."</li>
-</ul>
+<p><strong>Not in scope this phase:</strong> no expanding Windows/GPU tasks, no increasing N, no re-testing Kimi (see DECISIONS).</p>
 <hr />
 <h2>Appendix: full-set numbers (N differs — for reference only, <strong>not</strong> a comparable conclusion)</h2>
 <table>

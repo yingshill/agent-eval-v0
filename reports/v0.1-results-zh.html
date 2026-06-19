@@ -50,7 +50,7 @@ h2,h3 { page-break-after:avoid; }
 <li>纯换 GLM（不路由）= <strong>76% 质量 / 省 8.4×</strong>；</li>
 <li>按题路由（难题回退 Claude）= <strong>99% 质量 / 省 ~2×</strong>。</li>
 </ul>
-<p><strong>后者几乎不丢质量、成本仍砍一半，且正落在 Paul 设的 ≤½ 线上</strong>——这就是 hybrid 路由要交付的甜区，也是 v0.1 把「能不能替」推进到「怎么替最划算」的一步。</p>
+<p><strong>后者几乎不丢质量、成本仍砍一半，并且落在 Paul 设的 ≤½ 线上</strong>——这就是 hybrid 路由要交付的甜区，也是 v0.1 把「能不能替」推进到「怎么替最划算」的一步。</p>
 <hr />
 <h2>1. 短名单：套达标线（common-14）</h2>
 <table>
@@ -104,7 +104,7 @@ h2,h3 { page-break-after:avoid; }
 </tr>
 </tbody>
 </table>
-<p><strong>质量是唯一筛子。</strong> DeepSeek / Qwen 的成本其实都已 ≤½，被卡的全在 70% 质量线——所以这条线下短名单干净（只有 GLM），对外最好讲：<strong>纯按质量筛掉，没有靠成本门槛硬卡。</strong></p>
+<p><strong>质量是唯一筛子。</strong> DeepSeek / Qwen 的成本其实都已 ≤½，被卡的全在 70% 质量线——所以这条线下短名单干净（只有 GLM），对外我们的话术是：<strong>纯按质量筛掉，没有靠成本门槛硬卡。</strong></p>
 <hr />
 <h2>2. Per-task 分档：14 题里 10 道走 GLM、4 道留 Claude</h2>
 <p>我们把 14 道题逐题对比 GLM 与 Claude，门槛设为「该题 GLM 得分 ≥ Claude 的 70%」。结果清楚地分成两类：</p>
@@ -154,7 +154,7 @@ h2,h3 { page-break-after:avoid; }
 <p>路由机制：便宜模型先跑 → 自动判分 → 没过回退 Claude（verify-then-route）。质量与 oracle 分流持平（0.647），成本略高（$0.22，因为回退题付了两遍）。</p>
 </blockquote>
 <hr />
-<h2>4. 局限（必须如实标注）</h2>
+<h2>4. 局限</h2>
 <ul>
 <li><strong>「99% / 2×」是可达上界，不是生产实测。</strong> 它是在 ALE 14 题上、用<strong>真实判分器</strong>模拟分流得到的；生产里没有现成判分器，实际落点取决于「分类器 + verify 代理」的准确度——会落在「纯 GLM 76%」与「上界 99%」之间。</li>
 <li><strong>样本小：</strong> common-14；趋势可信，绝对值待更大 N 收敛。</li>
@@ -163,16 +163,38 @@ h2,h3 { page-break-after:avoid; }
 </ul>
 <hr />
 <h2>5. 下一步（谁做什么）</h2>
-<p><strong>Abby（SDE）—— 把底表变成真正的路由器，其中有几步并不依赖达标线、可以即刻开工：</strong></p>
+<p><strong>SDE（Abby）—— 把底表变成路由器。下面每个要运行 / 打开的文件都标了路径（相对 repo 根目录）；脚本只用 Python 标准库、无需安装依赖，统一在 repo 根目录下运行。起手先开 <code>analysis/README.md</code>。</strong></p>
+<p><strong>第一步 · 复现并确认对齐（可立即开工，不依赖达标线）</strong></p>
 <ul>
-<li>第一步，用 <a href="v0-per-task-matrix.csv">per-task 矩阵 CSV</a> 把第 2 节的按题分档和第 3 节的混合省钱曲线在自己这边复跑一遍，确认数字对得上（脚本逻辑我已经独立重写审计过，四个关键点分毫不差）。</li>
-<li>第二步，搭出 verify-then-route 的运行时原型：便宜模型先跑，自动判分，没过就回退 Claude。这一层是兜底机制，不依赖任何门槛，可以先动手。</li>
-<li>第三步，起草轻量分类器的方案：把用户 prompt 判成任务类型加难度，并带上置信度——置信度低时默认把任务留给 Claude，避免判错就路由错。先把方案定下来，具体实现可以稍后。</li>
-<li>真实流量阶段再接力：用各模型官方计费价核对我们自算的成本、从 token 或渠道反推任务类型、接入线上的成败信号与打点字段，把「公开基准离线分级」过渡到「自有流量在线细化」。</li>
+<li>在 repo 根目录运行：<code>python3 analysis/apply_threshold.py</code></li>
+<li>它读入：<code>reports/v0-per-task-matrix.csv</code>（18×4 底表，已提交）</li>
+<li>它产出：终端打印第 1 节短名单、第 2 节分档、第 3 节省钱曲线；并写出 <code>reports/routing-policy.csv</code>（每道题 → 走 GLM 还是 Claude）</li>
+<li>跑出来该是什么（对齐判据）：短名单 GLM 76% / 8.4×、DeepSeek 与 Qwen 都卡质量；分档 10 道 GLM-safe / 4 道 Claude-only；曲线 纯 GLM 76% / 8.4×、按题混合 99% / ~2×。和本报告一致即对齐。</li>
+<li>想换达标线：改 <code>analysis/apply_threshold.py</code> 顶部的 <code>Q_BAR</code> / <code>C_BAR</code> 两个常量再跑。</li>
+<li>想弄清这些数怎么来的：看 <code>analysis/README.md</code>（脚本对应哪一节、用了哪些单价），以及 <code>analysis/extract_matrix.py</code>（底表的来源；注意它读的原始 <code>.logs/</code> 不在 repo、只在本地）。</li>
+<li><strong>做完的标志：</strong> 你这边跑出的数和报告一致，且生成了 <code>reports/routing-policy.csv</code>。</li>
 </ul>
-<p><strong>Elena（PM）：</strong> 负责本报告与套表的交付（短名单加路由建议），英文版按团队需要再出。</p>
-<p><strong>Paul：</strong> ≤½ 是一个起步值。等 Abby 把 verify-then-route 的真实落点跑出来、或者接上真实流量数据之后，再决定这条线是收紧还是维持。</p>
-<p><strong>Han（ALE 作者）：</strong> 确认 per-run 判分口径是否就是我们用的这套，以及 ALE 私有题库未来对我们的可用范围。</p>
+<p><strong>第二步 · verify-then-route 原型（兜底层，不依赖达标线，分两段）</strong></p>
+<p>「自动判分用什么来判」必须先分清，否则会卡住：</p>
+<ul>
+<li>① <strong>离线段（先做，纯数据、不用真跑模型）：</strong> 模拟「GLM 先跑、没过就回退 Claude」，在这 14 题上复现 99% / 2× 那条线。逻辑已经在 <code>analysis/apply_threshold.py</code> 里——具体是 <code>blended()</code> 函数，以及名为 <code>Verify-then-route (realistic)</code> 的那条 policy，照着改即可。<strong>做完的标志</strong>=一个能跑出 99% / 2× 的原型。</li>
+<li>② <strong>生产段：</strong> 生产里没有 ALE 那个判分器，所以要设计一个 accept/reject 代理（judge 模型或启发式规则）来替代它，决定「这次 GLM 的输出该不该被接受」。验证时拿 <code>reports/routing-policy.csv</code> 里的 <code>route_to</code> 列当对照。<strong>做完的标志</strong>=代理方案 + 它在 14 题上判「该不该回退」的准确率。</li>
+</ul>
+<p><strong>第三步 · 轻量分类器（先做设计、不训模型）</strong></p>
+<ul>
+<li>把用户 prompt 判成任务类型 + 难度。标签空间 = ALE 的 8 个领域，可直接从 <code>reports/v0-per-task-matrix.csv</code> 的 <code>task</code> 列前缀读出来：business_finance / computing_math / health_medicine / life_sciences / legal / physical_sciences / education_info / transport_safety。</li>
+<li>带置信度，置信度低时默认把任务留给 Claude，避免判错就路由错。</li>
+<li>训练数据很薄（只有这 14 道、8 个领域各一两例），所以现阶段是<strong>定方案、定标签空间、定置信门槛，不是训模型</strong>。<strong>做完的标志</strong>=一页设计 + 标签空间 + 低置信兜底规则。</li>
+</ul>
+<p><strong>第四步 · 真实流量阶段再接力</strong></p>
+<ul>
+<li>用各模型官方计费价核对我们自算的成本（现用价目见 <code>analysis/README.md</code> 的价格表）、从 token 或渠道反推任务类型、接入线上的成败信号与打点字段，把「公开基准离线分级」过渡到「自有流量在线细化」。</li>
+</ul>
+<blockquote>
+<p><strong>起手两步：</strong> 先打开 <code>analysis/README.md</code> 读一遍，再在 repo 根目录跑 <code>python3 analysis/apply_threshold.py</code>。</p>
+</blockquote>
+<p><strong>Elena（PM）：</strong> 负责本报告与套表的交付（短名单加路由建议）</p>
+<p><strong>Paul：</strong> ≤½ 是一个起步值。等 sde 把 verify-then-route 的真实落点跑出来、或者接上真实流量数据之后，再决定这条线是否需要调整。</p>
 <p><strong>本阶段不做：</strong> 不扩 N、不加 Windows/GPU 题、不重测 Kimi（见 <a href="../DECISIONS.md">DECISIONS</a>）。</p>
 <hr />
 <p><em>数据与全程证据：repo <code>agent-eval-v0</code>（<a href="v0-per-task-matrix.csv">底表 CSV</a> / <a href="../run-log.md">run-log</a> / <a href="../findings.md">findings</a>）。达标线决策见 <a href="../DECISIONS.md">DECISIONS</a>。</em></p>

@@ -1,0 +1,201 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><style>
+@page { size: A4; margin: 18mm 16mm 18mm 16mm; }
+* { box-sizing: border-box; }
+body {
+  font-family: "PingFang SC","Hiragino Sans GB","Microsoft YaHei",-apple-system,
+               "Helvetica Neue",Arial,sans-serif;
+  color: #1f2328; line-height: 1.65; font-size: 13.5px;
+  max-width: 820px; margin: 0 auto; padding: 8px 4px;
+  -webkit-font-smoothing: antialiased;
+}
+h1 { font-size: 23px; font-weight: 700; margin: 6px 0 2px; color:#111; }
+h2 { font-size: 16.5px; font-weight: 700; margin: 22px 0 8px; padding-bottom:5px;
+     border-bottom: 2px solid #e6e8eb; color:#111; }
+h3 { font-size: 14px; font-weight: 700; margin: 16px 0 6px; }
+p { margin: 7px 0; }
+strong { color:#0b1f3a; font-weight:700; }
+a { color:#2563eb; text-decoration:none; word-break:break-all; }
+ul,ol { margin: 6px 0 6px 0; padding-left: 22px; }
+li { margin: 3px 0; }
+hr { border:0; border-top:1px solid #e6e8eb; margin:18px 0; }
+code { background:#f3f4f6; padding:1px 5px; border-radius:4px;
+       font-family:"SF Mono",Menlo,Consolas,monospace; font-size:0.88em; color:#b1003a; }
+blockquote { margin:10px 0; padding:8px 14px; background:#fff8e6;
+             border-left:4px solid #f0b400; color:#5a4a00; border-radius:0 4px 4px 0; }
+table { border-collapse:collapse; width:100%; margin:12px 0; font-size:12.5px;
+        page-break-inside:avoid; }
+th,td { border:1px solid #d8dce0; padding:7px 10px; text-align:left; vertical-align:top; }
+th { background:#0b1f3a; color:#fff; font-weight:600; }
+tr:nth-child(even) td { background:#f7f9fb; }
+table strong { color:#0b6b3a; }
+h2,h3 { page-break-after:avoid; }
+</style></head><body><h1>Agent Substitution v0.1 — Short-list + Routing Recommendation</h1>
+<ul>
+<li>You are reading: <strong>the v0.1 results report</strong> — the short-list, per-task routing, and blended savings after applying the bar</li>
+<li>Upstream: <a href="v0-results-en.md">v0 results report</a> — the quality × cost table (results after running)</li>
+<li>Source table: <a href="v0-per-task-matrix.csv">per-task matrix CSV</a> — 18×4 (score + token + $), the source of every number here</li>
+<li>
+<p>Evidence: <a href="../run-log.md">run-log</a> · bug write-up: <a href="../findings.md">findings</a></p>
+</li>
+<li>
+<p>Bar: Paul locked <strong>quality ≥ 70% / cost ≤ ½</strong> (a starting value, see <a href="../DECISIONS.md">DECISIONS</a>)</p>
+</li>
+<li>Scope: the common-14 task set, consistent with and comparable to the v0 main table</li>
+<li>Numbers: all recomputed line-by-line against the source table, fully traceable</li>
+</ul>
+<hr />
+<h2>0. Bottom line</h2>
+<p><strong>Under the bar Paul locked (quality ≥ 70% / cost ≤ ½), the cheap-model short-list is GLM-4.6 only.</strong> But the real product conclusion isn't "swap to GLM or not" — it's <strong>how to route</strong>:</p>
+<ul>
+<li>Swap everything to GLM (no routing) = <strong>76% quality / 8.4× cheaper</strong>;</li>
+<li>Route per task (fall back to Claude on hard tasks) = <strong>99% quality / ~2× cheaper</strong>.</li>
+</ul>
+<p><strong>The latter loses almost no quality and still halves the cost, and it lands right on the ≤½ line Paul set</strong> — this is the sweet spot hybrid routing is meant to deliver, and it's how v0.1 moves the project from "can it be replaced" to "how to replace it most cost-effectively."</p>
+<hr />
+<h2>1. Short-list: applying the bar (common-14)</h2>
+<table>
+<thead>
+<tr>
+<th>Model</th>
+<th>Quality</th>
+<th>= Claude</th>
+<th>$/task</th>
+<th>= Claude cost</th>
+<th>Cheaper</th>
+<th>Pass?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Claude sonnet-4.6</td>
+<td>0.653</td>
+<td>100%</td>
+<td>$0.439</td>
+<td>1.00</td>
+<td>1×</td>
+<td>baseline</td>
+</tr>
+<tr>
+<td><strong>GLM-4.6</strong></td>
+<td><strong>0.497</strong></td>
+<td><strong>76%</strong></td>
+<td><strong>$0.052</strong></td>
+<td><strong>0.12</strong></td>
+<td><strong>8.4×</strong></td>
+<td>✅ <strong>short-list</strong></td>
+</tr>
+<tr>
+<td>DeepSeek V3.2</td>
+<td>0.433</td>
+<td>66%</td>
+<td>$0.162</td>
+<td>0.37</td>
+<td>2.7×</td>
+<td>❌ fails quality</td>
+</tr>
+<tr>
+<td>Qwen3-Coder</td>
+<td>0.377</td>
+<td>58%</td>
+<td>$0.209</td>
+<td>0.48</td>
+<td>2.1×</td>
+<td>❌ fails quality</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Quality is the only filter.</strong> DeepSeek and Qwen already meet the ≤½ cost bar — what stops them is the 70% quality line. So under this bar the short-list is clean (GLM only), and our external framing is straightforward: <strong>filtered purely on quality, not gated by a cost threshold.</strong></p>
+<hr />
+<h2>2. Per-task tiers: 10 of 14 tasks go to GLM, 4 stay on Claude</h2>
+<p>We compared GLM against Claude task by task, with the bar set to "GLM's score on this task ≥ 70% of Claude's." The result splits cleanly into two groups:</p>
+<ul>
+<li>🟢 <strong>10 GLM-safe tasks.</strong> GLM meets or exceeds the bar on these, so they can go straight to the cheap model — on financial_stmt, pe_screening, os_log, and tcga GLM mostly scored 100% or higher, and k8s, homework, agora and others also clear the line.</li>
+<li>🔴 <strong>4 Claude-only tasks.</strong> GLM clearly cannot do these, so Claude must be kept: causal_ihdp_ite_estimation (Claude 0.178 / GLM 0.000), crf_sdtm_mapping (0.589 / 0.000), molecular_structure_plausibility (0.500 / 0.167), capacitated_vehicle_routing (1.000 / 0.000).</li>
+</ul>
+<p><strong>This shows the right form of routing is not "swap Claude out for GLM wholesale" but "route per task":</strong> send what GLM can handle to GLM, fall back to Claude on the hard tasks. This 10-vs-4 split is the first prototype of the routing policy table.</p>
+<hr />
+<h2>3. Blended savings curve ⭐ (the core conclusion)</h2>
+<table>
+<thead>
+<tr>
+<th>Policy</th>
+<th>Quality</th>
+<th>= Claude</th>
+<th>$/task</th>
+<th>Cheaper</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>All-Claude (baseline)</td>
+<td>0.653</td>
+<td>100%</td>
+<td>$0.439</td>
+<td>1×</td>
+</tr>
+<tr>
+<td>Pure GLM (no routing)</td>
+<td>0.497</td>
+<td>76%</td>
+<td>$0.052</td>
+<td>8.4×</td>
+</tr>
+<tr>
+<td><strong>Per-task hybrid / verify fallback</strong></td>
+<td><strong>0.647</strong></td>
+<td><strong>99%</strong></td>
+<td><strong>~$0.22</strong></td>
+<td><strong>~2×</strong></td>
+</tr>
+</tbody>
+</table>
+<p><strong>In one line:</strong> swapping to GLM trades away 24% of quality for 8.4× cheaper; <strong>routing per task gives up only 1% of quality and still saves ~2×</strong> — hard tasks fall back to Claude, so almost no quality is lost while cost is halved. And this hybrid point lands right on the ≤½ cost line Paul set (0.5× cost / 99% quality), which means his starting bar is an <strong>achievable sweet spot</strong> under per-task routing, not an arbitrary number.</p>
+<blockquote>
+<p>Routing mechanism: the cheap model runs first → auto-scored → falls back to Claude if it doesn't pass (verify-then-route). Quality matches oracle routing (0.647); cost is slightly higher ($0.22, because fallback tasks are paid for twice).</p>
+</blockquote>
+<hr />
+<h2>4. Limitations</h2>
+<ul>
+<li><strong>"99% / 2×" is an achievable upper bound, not a production measurement.</strong> It was obtained on the 14 ALE tasks using the real scorer to simulate routing; in production there is no ready-made scorer, so the actual result depends on the accuracy of the classifier and the verify proxy — it will land between "pure GLM at 76%" and "the 99% upper bound."</li>
+<li><strong>Small sample:</strong> common-14; the trend is reliable, but absolute values await a larger N.</li>
+<li><strong>Edge case:</strong> on epidemiology_forecast both models score 0, so it is counted as GLM-safe (both fail → route to the cheap model with no quality loss) — handled as expected and noted.</li>
+<li><strong>Distribution:</strong> still the public ALE benchmark, ≠ BFC's real traffic; the final answer needs real usage data to follow.</li>
+</ul>
+<hr />
+<h2>5. Next steps (who does what)</h2>
+<p><strong>SDE (Abby) — turn the source table into a router. Every file you need to run or open is given by path below (relative to the repo root); the scripts use only the Python standard library (no dependencies to install) and are all run from the repo root. Start by opening <code>analysis/README.md</code>.</strong></p>
+<p><strong>Step 1 · reproduce and confirm alignment (can start right away, no dependence on the bar)</strong></p>
+<ul>
+<li>From the repo root, run: <code>python3 analysis/apply_threshold.py</code></li>
+<li>It reads: <code>reports/v0-per-task-matrix.csv</code> (the 18×4 source table, committed)</li>
+<li>It produces: prints the §1 short-list, §2 tiers, and §3 savings curve; and writes <code>reports/routing-policy.csv</code> (per task → route to GLM or Claude)</li>
+<li>What you should get (alignment check): short-list GLM 76% / 8.4×, with DeepSeek and Qwen both failing on quality; tiers 10 GLM-safe / 4 Claude-only; curve pure-GLM 76% / 8.4×, per-task hybrid 99% / ~2×. Matching this report = aligned.</li>
+<li>To try a different bar: edit the <code>Q_BAR</code> / <code>C_BAR</code> constants at the top of <code>analysis/apply_threshold.py</code> and re-run.</li>
+<li>To understand where the numbers come from: see <code>analysis/README.md</code> (which script maps to which section, the prices used) and <code>analysis/extract_matrix.py</code> (the matrix's provenance; note it reads raw <code>.logs/</code> that are local-only, not in the repo).</li>
+<li><strong>Done = your numbers match the report, and <code>reports/routing-policy.csv</code> is generated.</strong></li>
+</ul>
+<p><strong>Step 2 · verify-then-route prototype (safety-net layer, no dependence on the bar, in two parts)</strong></p>
+<p>You must first pin down "auto-score with what," or you'll get stuck:</p>
+<ul>
+<li>(a) <strong>Offline (do this first; pure data, no live model runs):</strong> simulate "GLM runs first, falls back to Claude if it doesn't pass" on these 14 tasks, reproducing the 99% / 2× line. The logic is already in <code>analysis/apply_threshold.py</code> — specifically the <code>blended()</code> function and the policy named <code>Verify-then-route (realistic)</code>; adapt that. <strong>Done = a prototype that reproduces 99% / 2×.</strong></li>
+<li>(b) <strong>Production:</strong> there's no ALE scorer in production, so design an accept/reject proxy (a judge model or a heuristic) to stand in for it and decide "should this GLM output be accepted." Validate it against the <code>route_to</code> column in <code>reports/routing-policy.csv</code>. <strong>Done = the proxy design + its accuracy on the 14 tasks at deciding "fall back or not."</strong></li>
+</ul>
+<p><strong>Step 3 · lightweight classifier (design first, not a trained model)</strong></p>
+<ul>
+<li>Classify the user prompt into task type plus difficulty. The label space is ALE's 8 domains, readable directly from the <code>task</code> column prefix in <code>reports/v0-per-task-matrix.csv</code>: business_finance / computing_math / health_medicine / life_sciences / legal / physical_sciences / education_info / transport_safety.</li>
+<li>Attach a confidence score, and default to keeping the task on Claude when confidence is low, so a misclassification doesn't cause a misroute.</li>
+<li>Training data is thin (only these 14 tasks, one or two per domain), so this phase is about <strong>locking the design, label space, and confidence threshold — not training a model.</strong> <strong>Done = a one-pager design + label space + low-confidence fallback rule.</strong></li>
+</ul>
+<p><strong>Step 4 · real-traffic phase to follow</strong></p>
+<ul>
+<li>Check our computed costs against the models' official pricing (current prices are in <code>analysis/README.md</code>'s price table), infer task type from tokens or channel, and wire in online success/failure signals and instrumentation — moving from "offline tiering on a public benchmark" to "online refinement on our own traffic."</li>
+</ul>
+<blockquote>
+<p><strong>First two moves:</strong> open <code>analysis/README.md</code> and read it, then run <code>python3 analysis/apply_threshold.py</code> from the repo root.</p>
+</blockquote>
+<p><strong>Elena (PM):</strong> owns delivery of this report and the applied table (short-list plus routing recommendation).</p>
+<p><strong>Paul:</strong> ≤½ is a starting value. Once the SDE has the real routing results from verify-then-route, or once we're on real traffic data, decide whether the line needs adjusting.</p>
+<p><strong>Not in scope this phase:</strong> no expanding N, no adding Windows/GPU tasks, no re-testing Kimi (see <a href="../DECISIONS.md">DECISIONS</a>).</p>
+<hr />
+<p><em>Data and full evidence trail: repo <code>agent-eval-v0</code> (<a href="v0-per-task-matrix.csv">source CSV</a> / <a href="../run-log.md">run-log</a> / <a href="../findings.md">findings</a>). The bar decision is in <a href="../DECISIONS.md">DECISIONS</a>.</em></p>
+<p><strong>Repo:</strong> https://github.com/yingshill/agent-eval-v0</p></body></html>

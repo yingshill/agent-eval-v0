@@ -1,0 +1,15 @@
+task,tier,route_to,glm_score,claude_score,glm_cost,claude_cost
+business_finance/financial_stmt_reconstruction_aapl_fy2024,GLM-safe,GLM,1.0,1.0,0.0545,0.3947
+business_finance/pe_screening_memo_1,GLM-safe,GLM,0.944,0.9,0.0933,0.8604
+computing_math/k8s_payment_api_root_cause_analysis,GLM-safe,GLM,0.73,0.873,0.0126,0.1822
+computing_math/os_log_permission_guard_v1,GLM-safe,GLM,1.0,1.0,0.0333,0.2627
+computing_math/synthetic_causal_structure_inference,GLM-safe,GLM,0.261,0.335,0.0557,0.3756
+education_info/homework_grading_numerical_pdes_instance_02,GLM-safe,GLM,0.734,0.706,0.0641,0.3781
+health_medicine/causal_ihdp_ite_estimation_6a_v1,Claude-only,Claude,0.0,0.178,0.0727,0.3846
+health_medicine/crf_sdtm_mapping_4,Claude-only,Claude,0.0,0.589,0.0909,0.7688
+health_medicine/epidemiology_forecast,GLM-safe,GLM,0.0,0.0,0.0441,0.3825
+legal/agora_governance_classify_instance_1,GLM-safe,GLM,0.394,0.553,0.06,0.4185
+life_sciences/cell_tracking_instance_1,GLM-safe,GLM,0.725,0.504,0.0017,0.0122
+life_sciences/tcga_brca_deg_analysis,GLM-safe,GLM,1.0,1.0,0.0896,0.4885
+physical_sciences/molecular_structure_plausibility,Claude-only,Claude,0.167,0.5,0.0539,0.7832
+transport_safety/capacitated_vehicle_routing_problems,Claude-only,Claude,0.0,1.0,0.0023,0.4474

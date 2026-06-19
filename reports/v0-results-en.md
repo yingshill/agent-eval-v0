@@ -75,7 +75,7 @@ Notes on methodology:
 
 ## 6. Decision points for the team / Paul
 
-1. **Lock the bar (substitution threshold) — reference solution ready, Paul to confirm or adjust:**
+1. **Lock the bar (substitution threshold) — ✅ Paul locked the starting bar (2026-06-18): quality ≥ 70% / cost ≤ ½.**
 
    **Framework:** a cheap model "qualifies / makes the short-list" if quality ≥ **X%** of Claude AND cost ≤ **1/Y** of Claude — both must pass.
 
@@ -89,9 +89,10 @@ Notes on methodology:
 
    - **Why default 70% / 3×:** GLM passes **both** (76%, 8.4×); DeepSeek (66%) / Qwen (58%) fail quality — a clean short-list of just GLM, easiest to decide and to defend externally.
    - **This is only a coarse screen (who makes the short-list).** Real hybrid routing is **per-task / per-task-type** — "cheap by default, fall back to Claude on tasks it fails" — not aggregate means. v0 already stores per-task scores, so **v0.1 can estimate the actual blended saving** and refine X/Y into a per-task policy.
-   - **Paul to decide:** adopt default 70% / 3× (→ short-list = GLM), or slide up (conservative) / down (aggressive) by acceptable business risk?
+   - **Paul decided (starting value): quality ≥ 70% / cost ≤ ½** — the quality bar is the "default" tier's, the cost bar is looser than the default (½ rather than ⅓). Applied to the table → **short-list = GLM only** (quality is the binding constraint; DeepSeek/Qwen already meet ≤½ and fail only on quality).
+   - **Blended savings after applying the bar (v0.1):** pure GLM = 76% quality / 8.4× cheaper; **routing per task (hard tasks fall back to Claude) = 99% quality / ~2× cheaper**, landing right on the ≤½ cost line. The full short-list + per-task tiers + savings curve are in the [v0.1 results report](v0.1-results-en.md).
 
-2. **Expand scope:** whether to add Windows/GPU tasks, increase N, add candidates (incl. re-testing Kimi via its native endpoint).
+2. **Scope (decided this phase):** we do **not** expand Windows/GPU tasks, do **not** increase N, and do **not** re-test Kimi. v0.1 focuses on turning the existing 14-task findings into a landable routing strategy rather than broadening the benchmark. (Kimi's "unusable via OpenRouter routing" conclusion stands.)
 
 3. **Cost:** the full v0 run = **OpenRouter $67 + GCP ~$10–13 (estimated, billing lags) ≈ $77–80**, all infrastructure cost for a company pilot, itemized — to be reimbursed.
 
@@ -101,18 +102,16 @@ Notes on methodology:
 
 **Now · this week**
 
-- **Paul (decision, blocks everything downstream):** lock the bar — reference solution in §6.1 (recommended default 70% / 3× → short-list = GLM, with conservative/aggressive tiers also prepared), confirm or adjust. This is the prerequisite for the short-list / routing recommendation; until it's set, we stay at "data" and can't reach "recommendation."
-- **Elena (PM):** ① finalize v0 delivery (this report + repo: run-log evidence / findings bug writeup / quality×cost table); ② the moment Paul locks the bar, apply it and produce v0.1 "short-list + routing recommendation" (who can replace, when to fall back).
+- **Paul:** the bar is locked (quality ≥ 70%, cost ≤ ½, see §6.1) — a starting value. Its job is to settle which cheap models qualify for production routing; on the current data the short-list is GLM only. Once Abby has the real per-task routing results, or once we're on real traffic data, Paul decides whether to tighten the line or keep it.
+- **Elena (PM):** owns delivery of v0 and v0.1 — this report, the v0.1 short-list and routing recommendation, and the repo evidence trail (run-log's per-run records, the findings bug write-up, the quality×cost source table). English version produced as the team needs.
+- **Abby (SDE):** turn this offline conclusion into an actual routing system. First, reproduce the per-task tiers and the savings curve from the per-task source table to confirm the numbers (script logic audited). Second, prototype verify-then-route at runtime — the cheap model runs first, gets auto-scored, falls back to Claude if it doesn't pass; this safety-net layer doesn't depend on the bar and can start right away. Third, draft a lightweight-classifier design that classifies the user prompt into task type and difficulty with a confidence score, defaulting to Claude when confidence is low.
 
-**Next · v0.1 and expansion (PM-led, needs teammates)**
+**Next · real-traffic phase**
 
-- **Elena (PM):** ① expand the task set — add Windows/GPU tasks, increase N to cut noise (current common set N=14 is small); ② re-test Kimi via its native endpoint to isolate OpenRouter-routing vs the model itself; ③ produce an English report version as needed.
-- **Han (ALE author), support:** ① confirm whether the per-run scoring convention is the one we used; ② the future scope of ALE's private task set available to us.
-- **Abby, support:** ① official pricing tables for the candidate models, to check our recomputed costs; ② whether task_type can be inferred from tokens / channel; ③ whether any success/failure signal exists online — to pave the way for the real-traffic phase.
+- **Abby (SDE):** (1) check our recomputed costs against the models' official pricing; (2) infer task type from tokens / channel; (3) wire in online success/failure signals and align instrumentation (which task type, which model × harness, success or not, how much it cost). Together these are the leap from "offline tiering on a public benchmark" to "online refinement on our own traffic," and from v0's "can it replace" to a product-grade "real-time router."
+- **Han (ALE author):** confirm whether the per-run scoring convention is the one we used, and the future scope of ALE's private task set available to us.
 
-**Real-traffic phase · handoff**
-
-- **Elena × SDE:** align the instrumentation fields for live agent traffic (which task type, which model × harness, success or not, how much it cost), to move from "offline tiering on a public benchmark" to "online refinement on our own traffic" — the key leap from v0's "can it replace" to the product's "real-time routing."
+**Not in scope this phase:** no expanding Windows/GPU tasks, no increasing N, no re-testing Kimi (see DECISIONS).
 
 ---
 
